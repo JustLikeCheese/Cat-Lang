@@ -1,0 +1,11 @@
+{
+    name: ["Cat Language", ".ct"]
+    comment: {startsWith: "#"}
+    contains: [
+        {builtin: #C_QUOTED_STRING#}
+        {number: "10|16|F|E|P"}
+        {match: keywordsToRegex("local global boolean number userdata"), 0: "type"}
+        {match: keywordsToRegex("true false nil"), 0: "constant"}
+        {match: keywordsToRegex("return then while and break do else elseif end for function if in not or repeat until thread table"), 0: "keyword"}
+    ]
+}
