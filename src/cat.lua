@@ -7,6 +7,13 @@ string.split = string.split or function(str, sep)
     return result
 end
 
+local tonumbers = function(t)
+    for i, v in ipairs(t) do
+        t[i] = tonumber(v)
+    end
+    return t
+end
+
 cat.global = {}
 cat.globalIds = {}
 
@@ -24,12 +31,14 @@ cat.load = function(code)
     local state = {}
     local memory = {}
     local lengths = {}
+    local types = {}
     local length = nil
     -- .str
     local strings = string.split(lines[Type.STRING], " ")
     for i = 1, #strings do
         strings[i] = strings[i]:gsub('\\\\', '\\'):gsub('\\n"', '\n'):gsub('\\c', ' ')
         table.insert(memory, i)
+        table.insert(types, Type.STRING)
     end
     length = #strings
     table.insert(lengths, length)
@@ -40,41 +49,90 @@ cat.load = function(code)
         local globalId = cat.globalIds[links[i]]
         links[i] = globalId
         table.insert(memory, globalId)
+        table.insert(types, Type.LINK)
     end
-    state.lin = links
     length = length + #links
     table.insert(lengths, length)
+    state.lin = links
     -- .num
     local numbers = string.split(lines[Type.NUMBER], " ")
     for i = 1, #numbers do
         local number = tonumber(numbers[i])
         numbers[i] = number
         table.insert(memory, number)
+        table.insert(types, Type.NUMBER)
     end
-    state.num = numbers
     length = length + #numbers
     table.insert(lengths, length)
+    state.num = numbers
     -- .arr
-    local arrays = string.split(lines[Type.ARRAY], " ")
-    for i = 1, #arrays do
-        arrays[i] = string.split(arrays[i], ",")
-        for j = 1, #arrays[i] do
-            arrays[i][j] = tonumber(arrays[i][j])
+    local arrays = {}
+    local _arrayTokens = string.split(lines[Type.ARRAY], " ")
+    local _arrayLength = 0
+    local _array = nil
+    for i = 1, #_arrayTokens do
+        local _arrayToken = tonumber(_arrayTokens[i]) or 0 -- use 'or 0' to skip lua warnings
+        if _array == nil then
+            _arrayLength = _arrayToken
+        elseif _arrayLength == 0 then
+            _arrayLength = _arrayToken
+            table.insert(arrays, _array)
+            table.insert(memory, #arrays)
+            table.insert(types, Type.ARRAY)
+            _array = {}
+        else
+            table.insert(_array, _arrayToken)
+            _arrayLength = _arrayLength - 1
         end
-        table.insert(memory, i)
     end
-    state.arr = arrays
     length = length + #arrays
     table.insert(lengths, length)
+    state.arr = arrays
     -- .fun
     local functions = {}
+    local functionArgs = {}
+    local functionArgTypes = {}
+    local functionReturns = {}
+    local functionReturnTypes = {}
     for i = Type.FUNCTION, #lines do
-        functions[i - Type.FUNCTION] = string.split(lines[i], " ")
-        table.insert(memory, i)
+        local _funcTokens = string.split(lines[i], " ")
+        local _functionArgLength = _funcTokens[1]
+        local _functionReturnLength = _funcTokens[2]
+        local _functionArgs = {}
+        local _functionArgTypes = {}
+        local _functionReturns = {}
+        local _functionReturnTypes = {}
+        local _newFuncTokens = {}
+        for j = 3, #_funcTokens do
+            local _funcToken = tonumber(_funcTokens[j])
+            if _functionArgLength > 0 then
+                table.insert(_functionArgs, _funcToken)
+                table.insert(_functionArgTypes, types(_funcToken))
+                _functionArgLength = _functionArgLength - 1
+            elseif _functionReturnLength > 0 then
+                table.insert(_functionReturns, _funcToken)
+                table.insert(_functionReturnTypes, types(_funcToken))
+                _functionReturnLength = _functionReturnLength - 1
+            else
+                table.insert(_newFuncTokens, _funcToken)
+            end
+        end
+        table.insert(functions, _newFuncTokens)
+        table.insert(functionArgs, _functionArgs)
+        table.insert(functionArgTypes, _functionArgTypes)
+        table.insert(functionReturns, _functionReturns)
+        table.insert(functionReturnTypes, _functionReturnTypes)
+        table.insert(memory, #functions)
+        table.insert(types, Type.FUNCTION)
     end
     length = length + #functions
     table.insert(lengths, length)
     state.fun = functions
+    state.fun_args = functionArgs
+    state.fun_arg_types = functionArgTypes
+    state.fun_rets = functionReturns
+    state.fun_ret_types = functionReturnTypes
+    -- state
     state.mem = memory
     state.len = lengths
     return state
@@ -96,3 +154,5 @@ end
 cat.set = function(state, addr, value)
     state.mem[addr] = value
 end
+
+return cat
